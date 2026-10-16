@@ -4,7 +4,7 @@
 const std = @import("std");
 
 /// Logging duration (s).
-duration: f32,
+duration: u32,
 /// Items to be logged on every selected axis.
 config: Config,
 /// Axes to be logged.
