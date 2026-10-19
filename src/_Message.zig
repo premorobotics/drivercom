@@ -440,16 +440,18 @@ pub const Request = union(Kind) {
             const profile: Log.Command.Profile = switch (log.command) {
                 .position_profile, .speed_profile => |value| value,
             };
-            // Same f32 math and truncation as SHDrv's `CalculateRspSize()`:
-            // header, then per logged item of each axis a 4-byte tag and
-            // `Log.FREQUENCY` f32 samples per second, then ETX and BCC.
-            const item_count = @popCount(@as(u32, @bitCast(log.config)));
-            const axis_count = std.mem.countScalar(bool, &log.axes, true);
+            // Header, then per logged item of each axis a 4-byte tag and its
+            // f32 samples, then ETX and BCC. The sample count is truncated
+            // like SHDrv's `(int)(m_Sec * 15000)`.
+            const config_count = @popCount(@as(u32, @bitCast(log.config)));
+            const axis_count: u32 =
+                @intCast(std.mem.countScalar(bool, &log.axes, true));
+            const sample_count: u32 =
+                @trunc(@as(f32, @floatFromInt(Log.FREQUENCY)) * log.duration);
             const response_size: u32 = @sizeOf(Header) +
                 @sizeOf(Response.StartLog.Fragment) +
                 (@sizeOf(Response.StartLog.Block) +
-                    @sizeOf(f32) * Log.FREQUENCY * log.duration) *
-                    item_count * axis_count +
+                    @sizeOf(f32) * sample_count) * config_count * axis_count +
                 @sizeOf(@FieldType(Message, "etx")) +
                 @sizeOf(@FieldType(Message, "bcc"));
             var result: StartLog = .{
@@ -459,7 +461,7 @@ pub const Request = union(Kind) {
                 .position = profile.distance,
                 .profile_speed = profile.speed,
                 .profile_acceleration = profile.acceleration,
-                .response_size = @intFromFloat(response_size),
+                .response_size = response_size,
                 .duration = log.duration,
             };
             for (&result.config, log.axes) |*axis_config, is_logged| {

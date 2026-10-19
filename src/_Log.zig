@@ -6,8 +6,8 @@ const std = @import("std");
 /// Number of cycles per 1 second in the firmware.
 pub const FREQUENCY: u32 = 15000;
 
-/// Logging duration (s).
-duration: u32,
+/// Logging duration (>0 s).
+duration: f32,
 /// Items to be logged on every selected axis.
 config: Config,
 /// Axes to be logged.
