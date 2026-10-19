@@ -3,9 +3,12 @@
 //! message from the firmware. Caller must call `deinit()` to free allocated
 //! payload memory.
 
+// TODO: Validate values processed in `fromConfig` and `fromLogConfig`
+
 const std = @import("std");
 const builtin = @import("builtin");
 const Config = @import("_Config.zig");
+const Log = @import("_Log.zig");
 const Message = @This();
 
 const STX = 0x02;
@@ -191,9 +194,11 @@ pub const Request = union(Kind) {
     set_gain_current: CurrentGain,
     set_gain_speed: SpeedGain,
     set_gain_position: PositionGain,
+    start_log: StartLog,
     set_angle_offset: AngleOffset,
     set_section_count: SectionCount,
     get_section_count: [0]u8,
+    ack_log_fragment: bool,
 
     pub const SystemConfig = extern struct {
         pub fn fromConfig(config: Config) SystemConfig {
@@ -430,6 +435,106 @@ pub const Request = union(Kind) {
         _const_deno: u16 align(1) = 100,
     };
 
+    pub const StartLog = extern struct {
+        pub fn fromLogConfig(log: Log) StartLog {
+            const profile: Log.Command.Profile = switch (log.command) {
+                .position_profile, .speed_profile => |value| value,
+            };
+            // Same f32 math and truncation as SHDrv's `CalculateRspSize()`:
+            // header, then per logged item of each axis a 4-byte tag and
+            // `Log.FREQUENCY` f32 samples per second, then ETX and BCC.
+            const item_count = @popCount(@as(u32, @bitCast(log.config)));
+            const axis_count = std.mem.countScalar(bool, &log.axes, true);
+            const response_size: u32 = @sizeOf(Header) +
+                @sizeOf(Response.StartLog.Fragment) +
+                (@sizeOf(Response.StartLog.Block) +
+                    @sizeOf(f32) * Log.FREQUENCY * log.duration) *
+                    item_count * axis_count +
+                @sizeOf(@FieldType(Message, "etx")) +
+                @sizeOf(@FieldType(Message, "bcc"));
+            var result: StartLog = .{
+                .config = undefined,
+                .command = log.command,
+                .slider_id = log.slider_id,
+                .position = profile.distance,
+                .profile_speed = profile.speed,
+                .profile_acceleration = profile.acceleration,
+                .response_size = @intFromFloat(response_size),
+                .duration = log.duration,
+            };
+            for (&result.config, log.axes) |*axis_config, is_logged| {
+                inline for (@typeInfo(Log.Config).@"struct".fields) |field| {
+                    @field(axis_config.*, field.name) = AxisConfig.fromBool(
+                        is_logged and @field(log.config, field.name),
+                    );
+                }
+            }
+            return result;
+        }
+
+        /// The firmware accepts ASCII of `1` and `0` as true or false.
+        pub const AxisConfig = extern struct {
+            pub fn fromBool(value: bool) u8 {
+                return if (value) '1' else '0';
+            }
+
+            profile_position: u8,
+            profile_speed: u8,
+            position_output: u8,
+            position_reference: u8,
+            position_feedback: u8,
+            speed_reference: u8,
+            speed_feedback: u8,
+            current_q_reference: u8,
+            current_q_feedback: u8,
+            current_d_feedback: u8,
+            voltage_q_reference: u8,
+            voltage_d_reference: u8,
+            voltage_q_feedforward: u8,
+            voltage_d_feedforward: u8,
+            calculation_time: u8,
+            theta_section: u8,
+            electrical_angular_speed: u8,
+            in_position: u8,
+            current_a: u8,
+            current_b: u8,
+            current_c: u8,
+            voltage_alpha: u8,
+            voltage_beta: u8,
+            slider_state: u8,
+            applied_angle: u8,
+            encoder_angle: u8,
+            voltage_a: u8,
+            voltage_b: u8,
+            voltage_c: u8,
+            vector_sector: u8,
+            hall_alarm_left: u8,
+            hall_alarm_right: u8,
+        };
+
+        /// Logged items of each axis.
+        config: [3]AxisConfig,
+        command: Log.Command.Kind,
+        _reserved: u16 align(1) = 0,
+        /// TODO: Used by the offline commands.
+        voltage: f32 align(1) = 0,
+        slider_id: u8,
+        /// TODO: Used by `current_step`.
+        current: f32 align(1) = 0,
+        /// TODO: Used by `speed_step`.
+        speed: f32 align(1) = 0,
+        /// Travel distance of the profile commands.
+        position: f32 align(1),
+        /// Percentage of the maximum speed of the profile commands.
+        profile_speed: f32 align(1),
+        /// Percentage of the maximum acceleration of the profile commands.
+        profile_acceleration: f32 align(1),
+        /// Size of the whole response in bytes.
+        response_size: u32 align(1),
+        /// Logging duration (s).
+        duration: f32 align(1),
+    };
+
     pub const AngleOffset = extern struct {
         pub fn fromConfig(config: Config) AngleOffset {
             var result: AngleOffset = undefined;
@@ -568,9 +673,12 @@ pub const Response = union(Kind) {
     set_gain_current: Ack,
     set_gain_speed: Ack,
     set_gain_position: Ack,
+    start_log: StartLog,
     set_angle_offset: Ack,
     set_section_count: Ack,
     get_section_count: SectionCount,
+    /// The driver replies with the next log fragment, a `start_log` response.
+    ack_log_fragment: [0]u8,
 
     pub const SystemConfig = extern struct {
         pub fn setConfig(self: SystemConfig, config: *Config) void {
@@ -1106,6 +1214,32 @@ pub const Response = union(Kind) {
         },
     };
 
+    /// Leading byte of every log reply frame. The rest of the frame payload
+    /// is a part of the log data. Joining the parts of every frame in order
+    /// gives the whole log data: one `Block` per logged item of each logged
+    /// axis.
+    pub const StartLog = extern struct {
+        fragment: Fragment,
+
+        pub const Fragment = enum(u8) {
+            /// The frame carries the whole log data.
+            whole = 0x00,
+            first = 0x10,
+            middle = 0x20,
+            last = 0x30,
+            _,
+        };
+
+        /// Start of one logged item of one axis, followed by
+        /// `Log.FREQUENCY` * `Log.duration` f32 samples.
+        pub const Block = extern struct {
+            /// ASCII of the axis number, '1' to '3'.
+            axis: u16 align(1),
+            /// Index of the item in `Log.Config` plus one.
+            item: u16 align(1),
+        };
+    };
+
     pub const SectionCount = extern struct {
         pub fn setConfig(self: SectionCount, config: *Config) void {
             const max = self.max_section_cnt;
@@ -1243,9 +1377,11 @@ pub const Kind = enum(u8) {
     set_gain_current,
     set_gain_speed,
     set_gain_position,
+    start_log,
     set_angle_offset = 0x11,
     set_section_count = 0x15,
     get_section_count,
+    ack_log_fragment = 0x1C,
     _,
 };
 
