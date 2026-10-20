@@ -195,6 +195,7 @@ pub const Request = union(Kind) {
     set_gain_speed: SpeedGain,
     set_gain_position: PositionGain,
     start_log: StartLog,
+    initialize_slider: InitializeSlider,
     set_angle_offset: AngleOffset,
     set_section_count: SectionCount,
     get_section_count: [0]u8,
@@ -541,6 +542,16 @@ pub const Request = union(Kind) {
         duration: f32 align(1),
     };
 
+    /// Register a temporary slider on an axis for testing a single driver.
+    /// The driver forgets it unless the slider is actually on that axis.
+    pub const InitializeSlider = extern struct {
+        _reserved: u8 = 0,
+        /// ID of the slider.
+        slider_id: u8,
+        /// Axis number of the slider, 1 to 3.
+        axis: u8,
+    };
+
     pub const AngleOffset = extern struct {
         pub fn fromConfig(config: Config) AngleOffset {
             var result: AngleOffset = undefined;
@@ -680,6 +691,7 @@ pub const Response = union(Kind) {
     set_gain_speed: Ack,
     set_gain_position: Ack,
     start_log: StartLog,
+    initialize_slider: Ack,
     set_angle_offset: Ack,
     set_section_count: Ack,
     get_section_count: SectionCount,
@@ -1365,6 +1377,7 @@ pub const Response = union(Kind) {
 
     pub const Ack = enum(u8) {
         success = 0x00,
+        slider_already_exist = 0x06,
         _,
     };
 };
@@ -1384,6 +1397,7 @@ pub const Kind = enum(u8) {
     set_gain_speed,
     set_gain_position,
     start_log,
+    initialize_slider,
     set_angle_offset = 0x11,
     set_section_count = 0x15,
     get_section_count,
