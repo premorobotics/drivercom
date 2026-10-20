@@ -12,28 +12,31 @@ duration: f32,
 config: Config,
 /// Axes to be logged.
 axes: [3]bool,
-/// ID of the slider targeted by the command.
-slider_id: u8,
 /// Command run by the driver while logging.
 command: Command,
 
 pub const Command = union(Kind) {
     // TODO: Support the remaining commands SHDrv provide:
     // - Offline commands with applied voltage (V) and applied angle (turn):
-    //   current_state = 0, warm_up = 1, move_home = 2, move_forward = 3,
+    //   warm_up = 1, move_home = 2, move_forward = 3,
     //   move_backward = 4, restart = 5, move_synchronous = 6, move_dq = 7
     // - current_step = 10 with Q current step (A)
     // - speed_step = 11 with speed step (m/s)
     // - position_step = 12 with position step
+    /// Offline command that logs the driver as it stands.
+    current_state: struct {},
     position_profile: Profile,
     speed_profile: Profile,
 
     pub const Kind = enum(u8) {
+        current_state = 0,
         position_profile = 13,
         speed_profile = 14,
     };
 
     pub const Profile = struct {
+        /// ID of the slider targeted by the command (>0).
+        slider_id: u8,
         // Unit is unconfirmed: SHDrv labels it m but limits it as rad.
         /// Travel distance. Negative distance travels backward.
         distance: f32,

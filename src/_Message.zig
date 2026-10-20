@@ -437,9 +437,6 @@ pub const Request = union(Kind) {
 
     pub const StartLog = extern struct {
         pub fn fromLogConfig(log: Log) StartLog {
-            const profile: Log.Command.Profile = switch (log.command) {
-                .position_profile, .speed_profile => |value| value,
-            };
             // Header, then per logged item of each axis a 4-byte tag and its
             // f32 samples, then ETX and BCC. The sample count is truncated
             // like SHDrv's `(int)(m_Sec * 15000)`.
@@ -457,13 +454,18 @@ pub const Request = union(Kind) {
             var result: StartLog = .{
                 .config = undefined,
                 .command = log.command,
-                .slider_id = log.slider_id,
-                .position = profile.distance,
-                .profile_speed = profile.speed,
-                .profile_acceleration = profile.acceleration,
                 .response_size = response_size,
                 .duration = log.duration,
             };
+            switch (log.command) {
+                .current_state => {},
+                .position_profile, .speed_profile => |profile| {
+                    result.slider_id = profile.slider_id;
+                    result.position = profile.distance;
+                    result.profile_speed = profile.speed;
+                    result.profile_acceleration = profile.acceleration;
+                },
+            }
             for (&result.config, log.axes) |*axis_config, is_logged| {
                 inline for (@typeInfo(Log.Config).@"struct".fields) |field| {
                     @field(axis_config.*, field.name) = AxisConfig.fromBool(
@@ -518,19 +520,21 @@ pub const Request = union(Kind) {
         config: [3]AxisConfig,
         command: Log.Command.Kind,
         _reserved: u16 align(1) = 0,
-        /// TODO: Used by the offline commands.
+        /// Applied voltage (V).
         voltage: f32 align(1) = 0,
-        slider_id: u8,
+        /// ID of the slider targeted by the command.
+        slider_id: u8 = 0,
         /// TODO: Used by `current_step`.
         current: f32 align(1) = 0,
         /// TODO: Used by `speed_step`.
         speed: f32 align(1) = 0,
-        /// Travel distance of the profile commands.
-        position: f32 align(1),
+        /// Travel distance of the profile commands, or applied angle of the
+        /// offline commands (turn).
+        position: f32 align(1) = 0,
         /// Percentage of the maximum speed of the profile commands.
-        profile_speed: f32 align(1),
+        profile_speed: f32 align(1) = 0,
         /// Percentage of the maximum acceleration of the profile commands.
-        profile_acceleration: f32 align(1),
+        profile_acceleration: f32 align(1) = 0,
         /// Size of the whole response in bytes.
         response_size: u32 align(1),
         /// Logging duration (s).
