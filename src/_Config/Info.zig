@@ -313,6 +313,8 @@ pub const Axis = struct {
     base_position: Type = "f32",
     __base_position: Meta = .{
         .description = "Base position of Axis. Measured by calibration.",
+        .unit_short = "pitch",
+        .unit_long = "Magnet pitch",
     },
     sensor: struct {
         position: struct {
@@ -323,6 +325,8 @@ pub const Axis = struct {
                     \\Position where right sensor turns on in forward
                     \\direction. Measured by calibration.
                     ,
+                    .unit_short = "pitch",
+                    .unit_long = "Magnet pitch",
                 },
                 backward: Type = "f32",
                 __backward: Meta = .{
@@ -330,6 +334,8 @@ pub const Axis = struct {
                     \\Position where left sensor turns on in backward
                     \\direction. Measured by calibration.
                     ,
+                    .unit_short = "pitch",
+                    .unit_long = "Magnet pitch",
                 },
             } = .{},
             off: struct {
@@ -339,6 +345,8 @@ pub const Axis = struct {
                     \\Position where left sensor turns off in forward
                     \\direction. Measured by calibration.
                     ,
+                    .unit_short = "pitch",
+                    .unit_long = "Magnet pitch",
                 },
                 backward: Type = "f32",
                 __backward: Meta = .{
@@ -346,6 +354,8 @@ pub const Axis = struct {
                     \\Position where right sensor turns off in backward
                     \\direction. Measured by calibration.
                     ,
+                    .unit_short = "pitch",
+                    .unit_long = "Magnet pitch",
                 },
             } = .{},
         } = .{},
@@ -546,9 +556,17 @@ pub const State = struct {
         },
         bias: struct {
             a: Type = "f32",
-            __a: Meta = .{ .description = "A-phase current offset." },
+            __a: Meta = .{
+                .description = "A-phase current offset.",
+                .unit_short = "A",
+                .unit_long = "Ampere",
+            },
             b: Type = "f32",
-            __b: Meta = .{ .description = "B-phase current offset." },
+            __b: Meta = .{
+                .description = "B-phase current offset.",
+                .unit_short = "A",
+                .unit_long = "Ampere",
+            },
         } = .{},
     };
 };
