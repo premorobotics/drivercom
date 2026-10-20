@@ -2,6 +2,7 @@
 //! command while recording the configured items of the selected axes at 15000
 //! samples per second.
 const std = @import("std");
+const _Config = @import("_Config.zig");
 
 /// Number of cycles per 1 second in the firmware.
 pub const FREQUENCY: u32 = 15000;
@@ -92,6 +93,59 @@ pub const Config = packed struct(u32) {
     hall_alarm_left: bool,
     hall_alarm_right: bool,
 };
+
+/// Logged item, valued by its index in `Config`.
+pub const Item = Item: {
+    const fields = @typeInfo(Config).@"struct".fields;
+    var names: [fields.len][]const u8 = undefined;
+    var values: [fields.len]u5 = undefined;
+    for (fields, &names, &values, 0..) |field, *name, *value, index| {
+        name.* = field.name;
+        value.* = index;
+    }
+    break :Item @Enum(u5, .exhaustive, &names, &values);
+};
+
+/// Value type of a logged item.
+pub fn ConfigType(comptime item: Item) type {
+    return switch (item) {
+        .profile_position,
+        .profile_speed,
+        .position_output,
+        .position_reference,
+        .position_feedback,
+        .speed_reference,
+        .speed_feedback,
+        .current_q_reference,
+        .current_q_feedback,
+        .current_d_feedback,
+        .voltage_q_reference,
+        .voltage_d_reference,
+        .voltage_q_feedforward,
+        .voltage_d_feedforward,
+        .calculation_time,
+        .electrical_angular_speed,
+        .current_a,
+        .current_b,
+        .current_c,
+        .voltage_alpha,
+        .voltage_beta,
+        .applied_angle,
+        .encoder_angle,
+        .voltage_a,
+        .voltage_b,
+        .voltage_c,
+        => f32,
+        .theta_section,
+        .vector_sector,
+        => i32,
+        .slider_state => _Config.Fsm,
+        .in_position,
+        .hall_alarm_left,
+        .hall_alarm_right,
+        => bool,
+    };
+}
 
 test {
     std.testing.refAllDecls(@This());
