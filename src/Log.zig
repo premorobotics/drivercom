@@ -96,14 +96,12 @@ pub const Config = packed struct(u32) {
 
 /// Logged item, valued by its index in `Config`.
 pub const Item = Item: {
-    const fields = @typeInfo(Config).@"struct".fields;
-    var names: [fields.len][]const u8 = undefined;
-    var values: [fields.len]u5 = undefined;
-    for (fields, &names, &values, 0..) |field, *name, *value, index| {
-        name.* = field.name;
+    const names = @typeInfo(Config).@"struct".field_names;
+    var values: [names.len]u5 = undefined;
+    for (&values, 0..) |*value, index| {
         value.* = index;
     }
-    break :Item @Enum(u5, .exhaustive, &names, &values);
+    break :Item @Enum(u5, .exhaustive, names, &values);
 };
 
 /// Value type of a logged item.
