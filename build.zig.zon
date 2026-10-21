@@ -2,7 +2,7 @@
     .name = .drivercom,
     .version = "0.6.1",
     .fingerprint = 0xc1b53adfd36fc2f0,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{},
     .paths = .{
         "build.zig",
