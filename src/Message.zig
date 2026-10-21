@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
+const drivercom = @import("drivercom.zig");
 const Config = @import("Config.zig");
 const Log = @import("Log.zig");
 const Message = @This();
@@ -306,7 +307,7 @@ pub const Request = union(Kind) {
         voltage_warmup: f32 align(1),
         retry_count: u8,
         station: u16 align(1),
-        cc_link_speed: Config.CcLinkSpeed,
+        cc_link_speed: drivercom.CcLinkSpeed,
         hall_cutoff_freq: f32 align(1),
         overcurrent_timeout: f32 align(1),
         pos_offset: f32 align(1),
@@ -835,7 +836,7 @@ pub const Response = union(Kind) {
         },
         /// Driver ID on the line
         id: u16 align(1),
-        cc_link_speed: Config.CcLinkSpeed,
+        cc_link_speed: drivercom.CcLinkSpeed,
         /// Whether there is space on the edge of driver during calibration
         calibration_spare: extern struct {
             backward: bool,
@@ -955,9 +956,9 @@ pub const Response = union(Kind) {
         },
         theta_offset: f32 align(1),
         slide_state: extern struct {
-            axis1: Config.Fsm,
-            axis2: Config.Fsm,
-            axis3: Config.Fsm,
+            axis1: drivercom.Fsm,
+            axis2: drivercom.Fsm,
+            axis3: drivercom.Fsm,
         },
         is_calibrate: bool,
         bias: extern struct {
@@ -990,9 +991,9 @@ pub const Response = union(Kind) {
             id2: u8,
         },
         entrance: extern struct {
-            axis1: Config.Entrance,
-            axis2: Config.Entrance,
-            axis3: Config.Entrance,
+            axis1: drivercom.Entrance,
+            axis2: drivercom.Entrance,
+            axis3: drivercom.Entrance,
         },
         pitch_cnt: extern struct {
             axis1: i16 align(1),
@@ -1030,9 +1031,9 @@ pub const Response = union(Kind) {
         /// Bytes 162..165: not read.
         _4: [4]u8,
         over_charge_state: extern struct {
-            axis1: Config.Fsm,
-            axis2: Config.Fsm,
-            axis3: Config.Fsm,
+            axis1: drivercom.Fsm,
+            axis2: drivercom.Fsm,
+            axis3: drivercom.Fsm,
         },
         fwd_rsen_on_pos: extern struct {
             axis1: f32 align(1),

@@ -2,7 +2,7 @@
 //! command while recording the configured items of the selected axes at 15000
 //! samples per second.
 const std = @import("std");
-const Fsm = @import("Config.zig").Fsm;
+const drivercom = @import("drivercom.zig");
 
 /// Number of cycles per 1 second in the firmware.
 pub const FREQUENCY: u32 = 15000;
@@ -137,7 +137,7 @@ pub fn ConfigType(comptime item: Item) type {
         .theta_section,
         .vector_sector,
         => i32,
-        .slider_state => Fsm,
+        .slider_state => drivercom.Fsm,
         .in_position,
         .hall_alarm_left,
         .hall_alarm_right,
