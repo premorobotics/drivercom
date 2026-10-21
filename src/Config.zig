@@ -1,5 +1,6 @@
 //! This module represents driver's configuration.
 const std = @import("std");
+const drivercom = @import("drivercom.zig");
 const Config = @This();
 pub const Info = @import("Config/Info.zig");
 
@@ -8,7 +9,7 @@ id: u16,
 /// CC-Link Station ID
 station: u16,
 /// CC-Link baud rate
-cc_link_speed: CcLinkSpeed,
+cc_link_speed: drivercom.CcLinkSpeed,
 flags: Flags,
 line: struct {
     /// Total number of axes in line.
@@ -83,9 +84,9 @@ pub const State = struct {
     pub const Axis = struct {
         enabled: bool,
         primary: bool,
-        slider: struct { id: u8, state: Fsm },
-        entrance: Entrance,
-        overcharge_state: Fsm,
+        slider: struct { id: u8, state: drivercom.Fsm },
+        entrance: drivercom.Entrance,
+        overcharge_state: drivercom.Fsm,
         pitch_count: i16,
         mechanical_position: f32,
         // a and b needs confirmation.
@@ -177,15 +178,6 @@ pub const Flags = struct {
     swap: bool,
 };
 
-pub const CcLinkSpeed = enum(u8) {
-    @"156 kbps",
-    @"625 kbps",
-    @"2.5 Mbps",
-    @"5 Mbps",
-    @"10 Mbps",
-    _,
-};
-
 pub const CurrentGain = struct {
     p: f32,
     i: f32,
@@ -202,54 +194,6 @@ pub const SpeedGain = struct {
 pub const PositionGain = struct {
     p: f32,
     denominator: u16,
-};
-
-pub const Fsm = enum(u8) {
-    none = 0,
-    warm_up = 1,
-    warm_up_comp = 2,
-    warm_up_fault = 3,
-    curr_bias = 4,
-    curr_bias_comp = 5,
-    fwd_ramp = 8,
-    fwd_ramp_comp = 9,
-    fwd_ramp_fault = 10,
-    bwd_ramp = 11,
-    bwd_ramp_comp = 12,
-    bwd_ramp_fault = 13,
-    curr_step = 20,
-    curr_step_comp = 21,
-    curr_step_fault = 22,
-    speed_step = 23,
-    speed_step_comp = 24,
-    speed_step_fault = 25,
-    pos_step = 26,
-    pos_step_comp = 27,
-    pos_step_fault = 28,
-    pos_prof = 29,
-    pos_prof_comp = 30,
-    pos_prof_fault = 31,
-    fwd_calib = 32,
-    fwd_calib_comp = 33,
-    bwd_calib = 34,
-    bwd_calib_comp = 35,
-    speed_prof = 40,
-    speed_prof_comp = 41,
-    speed_prof_fault = 42,
-    fwd_slave = 43,
-    fwd_slave_comp = 44,
-    bwd_slave = 45,
-    bwd_slave_comp = 46,
-    over_charge = 50,
-    synch_com_error = 51,
-    _,
-};
-
-pub const Entrance = enum(u8) {
-    none = 0,
-    left = 1,
-    right = 2,
-    _,
 };
 
 test {
