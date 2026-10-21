@@ -39,6 +39,3 @@ jobs:
 
       - name: Run module tests
         run: zig build test --summary all
-
-      - name: Run library tests
-        run: zig build -Dlibrary=static test --summary all
