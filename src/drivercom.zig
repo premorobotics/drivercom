@@ -5,12 +5,8 @@ pub const version =
     std.SemanticVersion.parse(build.version) catch unreachable;
 
 pub const Config = @import("Config.zig");
-pub const _Config = @import("_Config.zig");
-pub const _Message = @import("_Message.zig");
-pub const _Log = @import("_Log.zig");
-pub const OldConfig = @import("OldConfig.zig");
+pub const Message = @import("Message.zig");
 pub const Log = @import("Log.zig");
-pub const Message = @import("message.zig").Message;
 
 pub const gain = struct {
     pub const current = struct {
@@ -70,26 +66,6 @@ pub const gain = struct {
         }
     };
 };
-
-pub const DriverMessage = enum(u16) {
-    none,
-    update,
-    set_aux,
-    set_move,
-    set_carrier_id,
-    set_isol_bwd,
-    set_isol_fwd,
-    prof_noti,
-    update_cali_home,
-    update_mech_angle_offset,
-    cali_on_pos_req,
-    cali_on_pos_rsp,
-    cali_off_pos_req,
-    cali_off_pos_rsp,
-    clear_carrier_info,
-};
-
-pub const CarrierState = @import("mmc_api").cclink.Wr.Carrier.State;
 
 test {
     std.testing.refAllDecls(@This());

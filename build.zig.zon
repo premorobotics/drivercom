@@ -3,12 +3,7 @@
     .version = "0.6.1",
     .fingerprint = 0xc1b53adfd36fc2f0,
     .minimum_zig_version = "0.16.0",
-    .dependencies = .{
-        .mmc_api = .{
-            .url = "https://github.com/pmotionf/mmc-api/archive/0a212c9.tar.gz",
-            .hash = "mmc_api-0.0.0-P5raR6pjMgCpq795vTCW5EnQ4eIrbLpCvA8SRw_8GS9Z",
-        },
-    },
+    .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",
