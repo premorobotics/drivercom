@@ -7,8 +7,8 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const Config = @import("_Config.zig");
-const Log = @import("_Log.zig");
+const Config = @import("Config.zig");
+const Log = @import("Log.zig");
 const Message = @This();
 
 const STX = 0x02;

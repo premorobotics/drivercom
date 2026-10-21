@@ -1,512 +1,150 @@
+//! This module represents driver's logging configuration. The driver runs the
+//! command while recording the configured items of the selected axes at 15000
+//! samples per second.
 const std = @import("std");
-const drivercom = @import("drivercom.zig");
+const Fsm = @import("Config.zig").Fsm;
 
-cycles: u32 = 0,
-config: Config = .{},
-axis: [3]bool = .{false} ** 3,
-hall_sensor: [6]bool = .{false} ** 6,
-carrier: [4]u12 = .{0} ** 4,
-start: struct {
-    kind: Start = .immediate,
-    combinator: Start.Combinator = .@"or",
-    hall_sensor: [6]bool = .{false} ** 6,
-    carrier: [4]u12 = .{0} ** 4,
-} = .{},
+/// Number of cycles per 1 second in the firmware.
+pub const FREQUENCY: u32 = 15000;
 
+/// Logging duration (>0 s).
+duration: f32,
+/// Items to be logged on every selected axis.
+config: Config,
+/// Axes to be logged.
+axes: [3]bool,
+/// Command run by the driver while logging.
+command: Command,
+
+pub const Command = union(Kind) {
+    // TODO: Support the remaining commands SHDrv provide:
+    // - Offline commands with applied voltage (V) and applied angle (turn):
+    //   warm_up = 1, move_home = 2, move_forward = 3,
+    //   move_backward = 4, restart = 5, move_synchronous = 6, move_dq = 7
+    // - current_step = 10 with Q current step (A)
+    // - speed_step = 11 with speed step (m/s)
+    // - position_step = 12 with position step
+    /// Offline command that logs the driver as it stands.
+    current_state: struct {},
+    position_profile: Profile,
+    speed_profile: Profile,
+
+    pub const Kind = enum(u8) {
+        current_state = 0,
+        position_profile = 13,
+        speed_profile = 14,
+    };
+
+    pub const Profile = struct {
+        /// ID of the slider targeted by the command (>0).
+        slider_id: u8,
+        // Unit is unconfirmed: SHDrv labels it m but limits it as rad.
+        /// Travel distance. Negative distance travels backward.
+        distance: f32,
+        /// Percentage of the maximum speed (%).
+        speed: f32,
+        /// Percentage of the maximum acceleration (%).
+        acceleration: f32,
+    };
+};
+
+/// Field order is the item index. The response tags the item with its index
+/// plus one.
 pub const Config = packed struct(u32) {
-    // Driver log.
-    driver: packed struct {
-        cycle: bool = false,
-        cycle_time: bool = false,
-        vdc: bool = false,
-        com_bwd_sent: bool = false,
-        com_bwd_arrived: bool = false,
-        com_fwd_sent: bool = false,
-        com_fwd_arrived: bool = false,
-        com_bwd_sent_cycles: bool = false,
-        com_fwd_sent_cycles: bool = false,
-    } = .{},
-
-    // Sensor log.
-    sensor: packed struct {
-        alarm: bool = false,
-        valid: bool = false,
-        active: bool = false,
-        angle: bool = false,
-        average_angle: bool = false,
-        distance: bool = false,
-        velocity: bool = false,
-    } = .{},
-
-    // Axis log.
-    axis: packed struct {
-        current_d: bool = false,
-        current_q: bool = false,
-        reference_current_d: bool = false,
-        reference_current_q: bool = false,
-        carrier_id: bool = false,
-        carrier_position: bool = false,
-        carrier_state: bool = false,
-        average_angle_diff: bool = false,
-        carrier_reference_velocity: bool = false,
-        carrier_velocity: bool = false,
-    } = .{},
-    _: u6 = 0,
+    /// Output position of the profile.
+    profile_position: bool,
+    /// Applied speed of the profile.
+    profile_speed: bool,
+    /// Output of the position controller.
+    position_output: bool,
+    /// Reference of the position controller (rad).
+    position_reference: bool,
+    /// Feedback of the position controller (rad).
+    position_feedback: bool,
+    /// Reference of the speed controller (rad/s).
+    speed_reference: bool,
+    /// Feedback of the speed controller (rad/s).
+    speed_feedback: bool,
+    current_q_reference: bool,
+    current_q_feedback: bool,
+    current_d_feedback: bool,
+    voltage_q_reference: bool,
+    voltage_d_reference: bool,
+    voltage_q_feedforward: bool,
+    voltage_d_feedforward: bool,
+    /// Calculation time of the control loop.
+    calculation_time: bool,
+    theta_section: bool,
+    electrical_angular_speed: bool,
+    in_position: bool,
+    current_a: bool,
+    current_b: bool,
+    current_c: bool,
+    voltage_alpha: bool,
+    voltage_beta: bool,
+    /// State of the slider's FSM.
+    slider_state: bool,
+    applied_angle: bool,
+    encoder_angle: bool,
+    voltage_a: bool,
+    voltage_b: bool,
+    voltage_c: bool,
+    vector_sector: bool,
+    hall_alarm_left: bool,
+    hall_alarm_right: bool,
 };
 
-/// Provides metadata for the field, type.
-pub const Info = struct {
-    cycles: []const u8 = "u32",
-    __cycles: Meta = .{
-        .description =
-        \\Duration of logging process (15000 cycles per second).
-        ,
-    },
-    config: struct {
-        // Driver log.
-        driver: struct {
-            cycle: []const u8 = "bool",
-            __cycle: Meta = .{
-                .description =
-                \\Number of performed internal loop (resets every 15000 cycles).
-                ,
-            },
-            cycle_time: []const u8 = "bool",
-            __cycle_time: Meta = .{
-                .description =
-                \\Number of performed internal loop per one control loop.
-                ,
-            },
-            vdc: []const u8 = "bool",
-            __vdc: Meta = .{
-                .description =
-                \\Supplied voltage to Driver.
-                ,
-            },
-            com_bwd_sent: []const u8 = "bool",
-            __com_bwd_sent: Meta = .{
-                .description =
-                \\Sent Driver state to backward Driver.
-                ,
-            },
-            com_bwd_arrived: []const u8 = "bool",
-            __com_bwd_arrived: Meta = .{
-                .description =
-                \\Driver state of backward Driver.
-                ,
-            },
-            com_fwd_sent: []const u8 = "bool",
-            __com_fwd_sent: Meta = .{
-                .description =
-                \\Sent Driver state to forward Driver.
-                ,
-            },
-            com_fwd_arrived: []const u8 = "bool",
-            __com_fwd_arrived: Meta = .{
-                .description =
-                \\Driver state of forward Driver.
-                ,
-            },
-            com_bwd_sent_cycles: []const u8 = "bool",
-            __com_bwd_sent_cycles: Meta = .{
-                .description =
-                \\Elapsed cycles since last Driver state sent to backward Driver.
-                ,
-            },
-            com_fwd_sent_cycles: []const u8 = "bool",
-            __com_fwd_sent_cycles: Meta = .{
-                .description =
-                \\Elapsed cycles since last Driver state sent to forward Driver.
-                ,
-            },
-        } = .{},
-        __driver: Meta = .{
-            .description =
-            \\Driver properties to be logged.
-            ,
-        },
-
-        // Sensor log.
-        sensor: struct {
-            alarm: []const u8 = "bool",
-            __alarm: Meta = .{
-                .description =
-                \\Magnet is detected by Sensor.
-                ,
-            },
-            valid: []const u8 = "bool",
-            __valid: Meta = .{
-                .description =
-                \\Sensor value is valid to be used.
-                ,
-            },
-            active: []const u8 = "bool",
-            __active: Meta = .{
-                .description =
-                \\Sensor value is actively used for carrier state.
-                ,
-            },
-            angle: []const u8 = "bool",
-            __angle: Meta = .{
-                .description =
-                \\Detected magnet angle by Sensor.
-                ,
-            },
-            average_angle: []const u8 = "bool",
-            __average_angle: Meta = .{
-                .description =
-                \\Detected average magnet angle by Sensor.
-                ,
-                .hidden = true,
-            },
-            distance: []const u8 = "bool",
-            __distance: Meta = .{
-                .description =
-                \\Distance traveled by detected magnet on Sensor.
-                ,
-            },
-            velocity: []const u8 = "bool",
-            __velocity: Meta = .{
-                .description =
-                \\Velocity of traveling magnet on Sensor.
-                ,
-            },
-        } = .{},
-        __sensor: Meta = .{
-            .description =
-            \\Sensor properties to be logged.
-            ,
-        },
-
-        // Axis log.
-        axis: struct {
-            current_d: []const u8 = "bool",
-            __current_d: Meta = .{
-                .description =
-                \\Supplied d current to Axis' motor.
-                ,
-            },
-            current_q: []const u8 = "bool",
-            __current_q: Meta = .{
-                .description =
-                \\Supplied q current to Axis' motor.
-                ,
-            },
-            reference_current_d: []const u8 = "bool",
-            __reference_current_d: Meta = .{
-                .description =
-                \\Reference value for d current to Axis' motor.
-                ,
-            },
-            reference_current_q: []const u8 = "bool",
-            __reference_current_q: Meta = .{
-                .description =
-                \\Reference value for q current to Axis' motor.
-                ,
-            },
-            carrier_id: []const u8 = "bool",
-            __carrier_id: Meta = .{
-                .description =
-                \\Detected Carrier ID on Axis.
-                ,
-            },
-            carrier_position: []const u8 = "bool",
-            __carrier_position: Meta = .{
-                .description =
-                \\Carrier position relative to Line's zero position.
-                ,
-            },
-            carrier_state: []const u8 = "bool",
-            __carrier_state: Meta = .{
-                .description =
-                \\State of detected Carrier on Axis.
-                ,
-            },
-            average_angle_diff: []const u8 = "bool",
-            __average_angle_diff: Meta = .{
-                .description =
-                \\Average angle difference between two Sensors of Axis.
-                ,
-            },
-            carrier_reference_velocity: []const u8 = "bool",
-            __carrier_reference_velocity: Meta = .{
-                .description =
-                \\Reference value for Carrier velocity.
-                ,
-            },
-            carrier_velocity: []const u8 = "bool",
-            __carrier_velocity: Meta = .{
-                .description =
-                \\Velocity of detected Carrier on Axis.
-                ,
-            },
-        } = .{},
-        _: []const u8 = "u6",
-        __axis: Meta = .{
-            .description =
-            \\Axis properties to be logged.
-            ,
-        },
-    } = .{},
-
-    axis: [3][]const u8 = .{"bool"} ** 3,
-    __axis: Meta = .{
-        .description =
-        \\Axes to be included in the logging process.
-        ,
-    },
-    hall_sensor: [6][]const u8 = .{"bool"} ** 6,
-    __hall_sensor: Meta = .{
-        .description =
-        \\Hall Sensors to be included in the logging process.
-        ,
-    },
-    carrier: [4][]const u8 = .{"u12"} ** 4,
-    __carrier: Meta = .{
-        .hidden = true,
-        .description =
-        \\Carriers IDs to be included in the logging process.
-        ,
-    },
-
-    start: struct {
-        kind: []const u8 = "enum",
-        __kind: Meta = .{
-            .description =
-            \\Event to trigger logging process.
-            ,
-        },
-        combinator: []const u8 = "enum",
-        __combinator: Meta = .{
-            .description =
-            \\Specifies if one or all conditions must be met to trigger logging.
-            ,
-        },
-        hall_sensor: [6][]const u8 = .{"bool"} ** 6,
-        __hall_sensor: Meta = .{
-            .description =
-            \\Hall Sensors used to trigger logging.
-            ,
-        },
-        carrier: [4][]const u8 = .{"u12"} ** 4,
-        __carrier: Meta = .{
-            .description =
-            \\Carriers used to trigger logging.
-            ,
-        },
-    } = .{},
-    __start: Meta = .{
-        .description =
-        \\Configuration to start logging process.
-        ,
-    },
-
-    pub const Meta = struct {
-        hidden: bool = false,
-        description: ?[]const u8 = null,
-        unit_short: ?[]const u8 = null,
-        unit_long: ?[]const u8 = null,
-    };
-};
-
-pub const Start = enum(u3) {
-    immediate = 0,
-    sensor_on = 1,
-    sensor_off = 2,
-    carrier_present = 3,
-    carrier_absent = 4,
-
-    pub const Combinator = enum(u1) { @"and", @"or" };
-};
-
-pub const Status = enum(u2) {
-    stopped = 0,
-    started = 1,
-    waiting = 2,
-    invalid = 3,
-};
-
-pub const Tag: type = b: {
-    const tag_type = u5;
-    var tag_value: tag_type = 0;
-    const enum_fields = unwrapConfig(Config, &tag_value, "");
-    var field_names: [enum_fields.len][]const u8 = undefined;
-    var field_values: [enum_fields.len]tag_type = undefined;
-    for (enum_fields, 0..) |field, i| {
-        field_names[i] = field.name;
-        field_values[i] = field.value;
+/// Logged item, valued by its index in `Config`.
+pub const Item = Item: {
+    const fields = @typeInfo(Config).@"struct".fields;
+    var names: [fields.len][]const u8 = undefined;
+    var values: [fields.len]u5 = undefined;
+    for (fields, &names, &values, 0..) |field, *name, *value, index| {
+        name.* = field.name;
+        value.* = index;
     }
-    break :b @Enum(tag_type, .exhaustive, &field_names, &field_values);
+    break :Item @Enum(u5, .exhaustive, &names, &values);
 };
 
-pub const TagKind = enum {
-    driver,
-    axis,
-    sensor,
-    carrier,
-};
-
-/// Returns size in bytes of data tag.
-pub fn tagSize(tag: Tag) u3 {
-    return switch (tag) {
-        .@"driver.cycle",
-        .@"driver.cycle_time",
-        .@"driver.vdc",
-        .@"sensor.alarm",
-        .@"sensor.valid",
-        .@"sensor.active",
-        .@"axis.carrier_id",
-        .@"driver.com_bwd_sent",
-        .@"driver.com_bwd_arrived",
-        .@"driver.com_fwd_sent",
-        .@"driver.com_fwd_arrived",
-        .@"driver.com_bwd_sent_cycles",
-        .@"driver.com_fwd_sent_cycles",
-        .@"axis.carrier_state",
-        => 2,
-        .@"sensor.angle",
-        .@"sensor.distance",
-        .@"sensor.average_angle",
-        .@"sensor.velocity",
-        .@"axis.current_d",
-        .@"axis.current_q",
-        .@"axis.reference_current_d",
-        .@"axis.reference_current_q",
-        .@"axis.carrier_position",
-        .@"axis.average_angle_diff",
-        .@"axis.carrier_reference_velocity",
-        .@"axis.carrier_velocity",
-        => 4,
-    };
-}
-
-pub fn tagParse(comptime tag: Tag, data: []const u8) TagType(tag) {
-    std.debug.assert(data.len == tagSize(tag));
-    switch (tag) {
-        .@"driver.cycle",
-        .@"driver.cycle_time",
-        .@"sensor.angle",
-        .@"sensor.average_angle",
-        .@"sensor.distance",
-        .@"sensor.velocity",
-        .@"axis.current_d",
-        .@"axis.current_q",
-        .@"axis.reference_current_d",
-        .@"axis.reference_current_q",
-        .@"axis.carrier_id",
-        .@"axis.carrier_position",
-        .@"axis.average_angle_diff",
-        .@"driver.com_bwd_sent",
-        .@"driver.com_bwd_arrived",
-        .@"driver.com_fwd_sent",
-        .@"driver.com_fwd_arrived",
-        .@"driver.com_bwd_sent_cycles",
-        .@"driver.com_fwd_sent_cycles",
-        .@"axis.carrier_state",
-        .@"axis.carrier_reference_velocity",
-        .@"axis.carrier_velocity",
-        => {
-            return std.mem.bytesToValue(TagType(tag), data);
-        },
-        .@"driver.vdc" => {
-            const result: u16 = std.mem.bytesToValue(u16, data);
-            var result_f: f32 = @floatFromInt(result);
-            result_f /= 100.0;
-            return result_f;
-        },
-        .@"sensor.alarm",
-        .@"sensor.valid",
-        .@"sensor.active",
-        => {
-            return data[0] != 0;
-        },
-    }
-}
-
-test tagParse {
-    const vdc: u16 = 12089;
-    try std.testing.expectEqual(
-        120.89,
-        tagParse(.@"driver.vdc", std.mem.asBytes(&vdc)),
-    );
-}
-
-pub fn TagType(comptime tag: Tag) type {
-    return switch (tag) {
-        .@"driver.com_bwd_sent",
-        .@"driver.com_bwd_arrived",
-        .@"driver.com_fwd_sent",
-        .@"driver.com_fwd_arrived",
-        => drivercom.DriverMessage,
-        .@"axis.carrier_state",
-        => drivercom.CarrierState,
-        .@"driver.cycle",
-        .@"driver.cycle_time",
-        .@"axis.carrier_id",
-        .@"driver.com_bwd_sent_cycles",
-        .@"driver.com_fwd_sent_cycles",
-        => u16,
-        .@"sensor.alarm",
-        .@"sensor.valid",
-        .@"sensor.active",
-        => bool,
-        .@"driver.vdc",
-        .@"sensor.angle",
-        .@"sensor.average_angle",
-        .@"sensor.distance",
-        .@"sensor.velocity",
-        .@"axis.current_d",
-        .@"axis.current_q",
-        .@"axis.reference_current_d",
-        .@"axis.reference_current_q",
-        .@"axis.carrier_position",
-        .@"axis.average_angle_diff",
-        .@"axis.carrier_reference_velocity",
-        .@"axis.carrier_velocity",
+/// Value type of a logged item.
+pub fn ConfigType(comptime item: Item) type {
+    return switch (item) {
+        .profile_position,
+        .profile_speed,
+        .position_output,
+        .position_reference,
+        .position_feedback,
+        .speed_reference,
+        .speed_feedback,
+        .current_q_reference,
+        .current_q_feedback,
+        .current_d_feedback,
+        .voltage_q_reference,
+        .voltage_d_reference,
+        .voltage_q_feedforward,
+        .voltage_d_feedforward,
+        .calculation_time,
+        .electrical_angular_speed,
+        .current_a,
+        .current_b,
+        .current_c,
+        .voltage_alpha,
+        .voltage_beta,
+        .applied_angle,
+        .encoder_angle,
+        .voltage_a,
+        .voltage_b,
+        .voltage_c,
         => f32,
+        .theta_section,
+        .vector_sector,
+        => i32,
+        .slider_state => Fsm,
+        .in_position,
+        .hall_alarm_left,
+        .hall_alarm_right,
+        => bool,
     };
-}
-
-pub fn tagKind(tag: Tag) TagKind {
-    if (@tagName(tag)[0] == 'd') return .driver;
-    if (@tagName(tag)[0] == 's') return .sensor;
-    if (@tagName(tag)[0] == 'a') return .axis;
-    if (@tagName(tag)[0] == 'v') return .carrier;
-
-    unreachable;
-}
-
-fn unwrapConfig(
-    T: anytype,
-    tag_value: *u5,
-    name: []const u8,
-) []const std.builtin.Type.EnumField {
-    const ti = @typeInfo(T).@"struct";
-    var result: []const std.builtin.Type.EnumField = &.{};
-    for (ti.fields) |field| {
-        const field_ti = @typeInfo(field.type);
-        switch (field_ti) {
-            .@"struct" => {
-                result = result ++ unwrapConfig(
-                    field.type,
-                    tag_value,
-                    if (name.len > 0)
-                        name ++ field.name ++ "."
-                    else
-                        field.name ++ ".",
-                );
-            },
-            .bool => {
-                result = result ++ .{std.builtin.Type.EnumField{
-                    .name = name ++ field.name,
-                    .value = tag_value.*,
-                }};
-                tag_value.* += 1;
-            },
-            else => {},
-        }
-    }
-    return result;
 }
 
 test {
