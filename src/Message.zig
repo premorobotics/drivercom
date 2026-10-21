@@ -27,7 +27,7 @@ bcc: u8,
 /// Write the message into the writer. The message is writen in Big Endian due
 /// to firmware implementation are using Big Endianness.
 pub fn write(self: Message, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-    const endian: std.builtin.Endian = .big;
+    const endian: std.lang.Endian = .big;
     try writer.writeStruct(self.header, endian);
     try writer.writeAll(self.payload);
     try writer.writeInt(u8, self.etx, endian);
@@ -173,8 +173,8 @@ pub const Header = extern struct {
         if (header.stx != STX) return ParseError.MissingStx;
         // Validate kind
         const kind_ti = @typeInfo(Kind).@"enum";
-        if (@intFromEnum(header.kind) >
-            kind_ti.fields[kind_ti.fields.len - 1].value)
+        if (@backingInt(header.kind) >
+            kind_ti.field_values[kind_ti.field_values.len - 1])
         {
             return error.InvalidPayload;
         }
@@ -468,9 +468,10 @@ pub const Request = union(Kind) {
                 },
             }
             for (&result.config, log.axes) |*axis_config, is_logged| {
-                inline for (@typeInfo(Log.Config).@"struct".fields) |field| {
-                    @field(axis_config.*, field.name) = AxisConfig.fromBool(
-                        is_logged and @field(log.config, field.name),
+                const names = @typeInfo(Log.Config).@"struct".field_names;
+                inline for (names) |name| {
+                    @field(axis_config.*, name) = AxisConfig.fromBool(
+                        is_logged and @field(log.config, name),
                     );
                 }
             }
@@ -1427,13 +1428,14 @@ fn getBcc(buf: []const u8) u8 {
 }
 
 test "get_ responses have setConfig and set_ requests have fromConfig" {
-    inline for (@typeInfo(Kind).@"enum".fields) |field| {
-        const kind: Kind = @enumFromInt(field.value);
-        if (comptime std.mem.startsWith(u8, field.name, "get_")) {
+    const kind_ti = @typeInfo(Kind).@"enum";
+    inline for (kind_ti.field_names, kind_ti.field_values) |name, value| {
+        const kind: Kind = @fromBackingInt(@intCast(value));
+        if (comptime std.mem.startsWith(u8, name, "get_")) {
             const T = PayloadType(kind, .response);
             try std.testing.expect(@hasDecl(T, "setConfig"));
         }
-        if (comptime std.mem.startsWith(u8, field.name, "set_")) {
+        if (comptime std.mem.startsWith(u8, name, "set_")) {
             const T = PayloadType(kind, .request);
             try std.testing.expect(@hasDecl(T, "fromConfig"));
         }
