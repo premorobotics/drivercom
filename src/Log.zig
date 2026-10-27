@@ -12,9 +12,15 @@ duration: f32,
 /// Items to be logged on every selected axis.
 config: Config,
 /// Axes to be logged.
-axes: [3]bool,
+axes: Axes,
 /// Command run by the driver while logging.
 command: Command,
+
+pub const Axes = struct {
+    axis1: bool,
+    axis2: bool,
+    axis3: bool,
+};
 
 pub const Command = union(Kind) {
     // TODO: Support the remaining commands SHDrv provide:
