@@ -443,8 +443,8 @@ pub const Request = union(Kind) {
             // f32 samples, then ETX and BCC. The sample count is truncated
             // like SHDrv's `(int)(m_Sec * 15000)`.
             const config_count = @popCount(@as(u32, @bitCast(log.config)));
-            const axis_count: u32 =
-                @intCast(std.mem.countScalar(bool, &log.axes, true));
+            const axis_names = @typeInfo(Log.Axes).@"struct".field_names;
+            const axis_count: u32 = axis_names.len;
             const sample_count: u32 =
                 @trunc(@as(f32, @floatFromInt(Log.FREQUENCY)) * log.duration);
             const response_size: u32 = @sizeOf(Header) +
@@ -468,7 +468,8 @@ pub const Request = union(Kind) {
                     result.profile_acceleration = profile.acceleration;
                 },
             }
-            for (&result.config, log.axes) |*axis_config, is_logged| {
+            inline for (&result.config, axis_names) |*axis_config, axis_name| {
+                const is_logged = @field(log.axes, axis_name);
                 const names = @typeInfo(Log.Config).@"struct".field_names;
                 inline for (names) |name| {
                     @field(axis_config.*, name) = AxisConfig.fromBool(
