@@ -439,12 +439,14 @@ pub const Request = union(Kind) {
 
     pub const StartLog = extern struct {
         pub fn fromLogConfig(log: Log) StartLog {
-            // Header, then per logged item of each axis a 4-byte tag and its
-            // f32 samples, then ETX and BCC. The sample count is truncated
-            // like SHDrv's `(int)(m_Sec * 15000)`.
             const config_count = @popCount(@as(u32, @bitCast(log.config)));
             const axis_names = @typeInfo(Log.Axes).@"struct".field_names;
-            const axis_count: u32 = axis_names.len;
+            var axis_count: u32 = 0;
+            inline for (axis_names) |axis_name| {
+                if (@field(log.axes, axis_name)) {
+                    axis_count += 1;
+                }
+            }
             const sample_count: u32 =
                 @trunc(@as(f32, @floatFromInt(Log.FREQUENCY)) * log.duration);
             const response_size: u32 = @sizeOf(Header) +
