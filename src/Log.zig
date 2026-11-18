@@ -3,6 +3,7 @@
 //! samples per second.
 const std = @import("std");
 const drivercom = @import("drivercom.zig");
+pub const Info = @import("Log/Info.zig");
 
 /// Number of cycles per 1 second in the firmware.
 pub const FREQUENCY: u32 = 15000;
